@@ -1,0 +1,31 @@
+# Compiled class file
+*.class
+*.jar
+*.war
+*.ear
+
+gradle/
+.gradle/
+
+# MacOS
+.DS_Store
+*/.DS_Store
+
+# Windows:
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Directory
+.idea/
+
+.metadata/
+*/.metadata/
+
+build/
+target/
+out/
+bin/
+
+# virtual machine crash logs
+hs_err_pid*
