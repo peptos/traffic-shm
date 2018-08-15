@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package io.traffic.shm.async.file;
+package io.traffic.shm.file;
 
 import io.traffic.util.UNSAFE;
 import io.traffic.util.Util;

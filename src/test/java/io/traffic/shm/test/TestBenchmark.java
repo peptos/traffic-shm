@@ -16,8 +16,8 @@
 
 package io.traffic.shm.test;
 
-import io.traffic.shm.async.queue.Block;
-import io.traffic.shm.async.queue.Queue;
+import io.traffic.shm.async.Block;
+import io.traffic.shm.async.Queue;
 import org.openjdk.jmh.annotations.*;
 
 import java.util.concurrent.TimeUnit;

@@ -16,9 +16,9 @@
 
 package io.traffic.shm.test;
 
-import io.traffic.shm.async.file.MappedFile;
-import io.traffic.shm.async.queue.Block;
-import io.traffic.shm.async.queue.Queue;
+import io.traffic.shm.async.Block;
+import io.traffic.shm.async.Queue;
+import io.traffic.shm.file.MappedFile;
 import io.traffic.util.Util;
 import org.junit.Test;
 

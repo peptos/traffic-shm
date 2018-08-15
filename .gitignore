@@ -4,7 +4,7 @@
 *.war
 *.ear
 
-gradle/
+#Gradle
 .gradle/
 
 # MacOS
