@@ -21,6 +21,7 @@ import io.traffic.util.Util;
 
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.lang.reflect.Method;
 import java.nio.channels.FileChannel;
@@ -95,7 +96,14 @@ public class MappedFile {
         if (!closed.compareAndSet(false, true)) {
             return;
         }
-        unmap0(channel, address, size);
+        try {
+            channel.force(true);
+            unmap0(channel, address, size);
+
+            raf.close();
+        } catch (IOException ex) {
+            throw new RuntimeException(ex);
+        }
     }
 
     private static long map0(FileChannel fileChannel, FileChannel.MapMode mode, long position, long size)  {
