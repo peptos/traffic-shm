@@ -97,6 +97,19 @@ public abstract class Util {
         return (value + mask) & ~mask; //((value + mask) / alignment) * alignment
     }
 
+    public static int align(int value, int alignment) {
+        int mask = alignment - 1;
+        return (value + mask) & ~mask; //((value + mask) / alignment) * alignment
+    }
+
+    public static long pageAlign(long size) {
+        return align(size, Constant.PAGE_SIZE);
+    }
+
+    public static int pageAlign(int size) {
+        return align(size, Constant.PAGE_SIZE);
+    }
+
     public static void pause(long millis) {
         long timeNanos = millis * 1000000;
         if (timeNanos > 10e6) {

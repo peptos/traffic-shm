@@ -19,6 +19,7 @@ package io.traffic.util;
 import sun.misc.Unsafe;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.nio.ByteOrder;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
@@ -32,13 +33,7 @@ public abstract class UNSAFE {
 
     private static final Unsafe unsafe;
 
-    private static final boolean BIG_ENDIAN = ByteOrder.nativeOrder() == ByteOrder.BIG_ENDIAN;
-
-    private static final boolean ALIGNED = aligned();
-
-    public static final int CACHE_LINE_LENGTH = 64;
-
-    private static final long UNSAFE_COPY_THRESHOLD = 1024L * 1024L;
+    private static final Object INTERNAL_UNSAFE;
 
     static {
         try {
@@ -54,6 +49,60 @@ public abstract class UNSAFE {
         } catch (Exception ex) {
             throw new RuntimeException("Unable to load unsafe", ex);
         }
+
+        if (javaVersion() >= 9) {
+            INTERNAL_UNSAFE = AccessController.doPrivileged(new PrivilegedAction<Object>() {
+                @Override
+                public Object run() {
+                    try {
+                        // Java9 has jdk.internal.misc.Unsafe and not all methods are propagated to
+                        // sun.misc.Unsafe
+                        Class<?> internalUnsafeClass = getClassLoader(UNSAFE.class)
+                                .loadClass("jdk.internal.misc.Unsafe");
+                        Method method = internalUnsafeClass.getDeclaredMethod("getUnsafe");
+                        return method.invoke(null);
+                    } catch (Throwable cause) {
+                        return cause;
+                    }
+                }
+            });
+        } else {
+            INTERNAL_UNSAFE = null;
+        }
+    }
+
+    private static final boolean BIG_ENDIAN = ByteOrder.nativeOrder() == ByteOrder.BIG_ENDIAN;
+
+    private static final boolean ALIGNED = aligned();
+
+    public static final int CACHE_LINE_LENGTH = 64;
+
+    private static final long UNSAFE_COPY_THRESHOLD = 1024L * 1024L;
+
+    private static final int JAVA_VERSION = javaVersion();
+
+    private static final int BYTE_ARRAY_OFFSET = UNSAFE.arrayBaseOffset(byte[].class);
+
+    private static int javaVersion() {
+        return majorVersionFromJavaSpecificationVersion();
+    }
+
+    private static int majorVersionFromJavaSpecificationVersion() {
+        return majorVersion(System.getProperty("java.specification.version", "1.6"));
+    }
+
+    private static int majorVersion(final String javaSpecVersion) {
+        final String[] components = javaSpecVersion.split("\\.");
+        final int[] version = new int[components.length];
+        for (int i = 0; i < components.length; i++) {
+            version[i] = Integer.parseInt(components[i]);
+        }
+        if (version[0] == 1) {
+            assert version[1] >= 6;
+            return version[1];
+        } else {
+            return version[0];
+        }
     }
 
     public static Unsafe getUnsafe() {
@@ -61,16 +110,31 @@ public abstract class UNSAFE {
     }
 
 
-    public static final int OBJECT_REFERENCE_ALIGN = unsafe.arrayIndexScale(Object[].class);
+    static ClassLoader getClassLoader(final Class<?> clazz) {
+        if (System.getSecurityManager() == null) {
+            return clazz.getClassLoader();
+        } else {
+            return AccessController.doPrivileged(new PrivilegedAction<ClassLoader>() {
+                @Override
+                public ClassLoader run() {
+                    return clazz.getClassLoader();
+                }
+            });
+        }
+    }
 
+    public static final int OBJECT_REFERENCE_ALIGN = unsafe.arrayIndexScale(Object[].class);
 
     private static boolean aligned() {
         return !Boolean.getBoolean("UNALIGNED");
     }
 
     private static boolean supportUnalignedAccess() {
-        String arch = AccessController.doPrivileged(new sun.security.action.GetPropertyAction("os.arch"));
-        return arch.equals("i386") || arch.equals("x86") || arch.equals("amd64") || arch.equals("x86_64");
+        String arch = getProperty("os.arch");
+        if (arch == null) {
+            return false;
+        }
+        return arch.matches("^(i[3-6]86|x86(_64)?|x64|amd64)$");
     }
 
     private static String getProperty(final String key) {
@@ -810,4 +874,31 @@ public abstract class UNSAFE {
     }
 
 
+    public static void setBytes(Object src, long address, long length) {
+        copyMemory(src, BYTE_ARRAY_OFFSET, null, address, length);
+    }
+
+    public static void getBytes(long address, Object dst, long length) {
+        copyMemory(null, address, dst, BYTE_ARRAY_OFFSET, length);
+    }
+
+    public static void setBytes(Object src, long srcOffset, long address, long length) {
+        copyMemory(src, BYTE_ARRAY_OFFSET + srcOffset, null, address, length);
+    }
+
+    public static void getBytes(long address, Object dst, long dstOffset, long length) {
+        copyMemory(null, address, dst, BYTE_ARRAY_OFFSET + dstOffset, length);
+    }
+
+    public static void fullFence() {
+        unsafe.fullFence();
+    }
+
+    public static void storeFence() {
+        unsafe.storeFence();
+    }
+
+    public static void loadFence() {
+        unsafe.loadFence();
+    }
 }

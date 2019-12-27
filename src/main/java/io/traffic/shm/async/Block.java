@@ -16,27 +16,22 @@
 
 package io.traffic.shm.async;
 
-import io.traffic.util.Constant;
-import io.traffic.util.Assert;
-import io.traffic.util.UNSAFE;
-import io.traffic.util.Util;
+import io.traffic.util.*;
+
 
 /**
  *
  *                  | ------ 4 bytes aligned ------ |
- *  +---------------+---------------+---------------+---------------+
- *  |0x1|0x2|0x3|0x4|0x1|0x2|0x3|0x4|0x1|0x2|0x3|0x4|0x1|0x2|0x3|   |
- *  +---------------+---------------+---------------+---------------+
- *  | ---- ACK ---  | --- length -- | ---------- payload ---------- |
- *  | --------------------------- block --------------------------- |
+ *  +---------------+---------------+---------------+
+ *  |0x1|0x2|0x3|0x4|0x1|0x2|0x3|0x4|0x1|0x2|0x3|   |
+ *  +---------------+---------------+---------------+
+ *  | --- length -- | ---------- payload ---------- |
+ *  | ------------------- block ------------------- |
  *
  *
  * @author cuiyi
  */
 public class Block {
-
-    private static final int PADDING = Constant.INT_SIZE * 2;
-    private static final int BYTE_ARRAY_OFFSET = UNSAFE.arrayBaseOffset(byte[].class);
 
     private final int length;
     private final byte[] payload;
@@ -47,73 +42,81 @@ public class Block {
         this.payload = payload;
     }
 
-
     public void serialize(long capacity, long address, long offset) {
         if (offset + sizeof() <= capacity) {
-            //no overflow
+            // no overflow
             serialize(address + offset);
-            return;
         } else {
             long available = capacity - offset;
             if (available < Constant.INT_SIZE) {
-                //whole block overflow
+                // whole block overflow
                 serialize(address + Metadata.ORIGIN_OFFSET);
-                return;
-            } else if (available >= Constant.INT_SIZE && available < PADDING) {
-                //put ack in, length & payload overflow
-                withACK(address + offset);
-                withPayload(withLength(address + Metadata.ORIGIN_OFFSET));
-                ack(address + offset);
-                return;
+            } else if (available == Constant.INT_SIZE) {
+                // put length in, but payload overflow
+                withLength(address + offset);
+                withPayload(address + Metadata.ORIGIN_OFFSET);
             } else {
-                //payload overflow
-                withLength(withACK(address + offset));
-                available -= PADDING;
+                // payload overflow
+                withLength((address + offset));
+                available -= Constant.INT_SIZE;;
                 if (available > 0) {
-                    setBytes(payload, address + offset + PADDING, available);
+                    UNSAFE.setBytes(payload, address + offset + Constant.INT_SIZE, available);
                 }
-                setBytes(payload, available, address + Metadata.ORIGIN_OFFSET, length - available);
-                ack(address + offset);
-                return;
+                UNSAFE.setBytes(payload, available, address + Metadata.ORIGIN_OFFSET, length - available);
             }
         }
     }
 
-    public synchronized static Block deserialize(long capacity, long address, long offset) {
+    public static Block deserialize(long capacity, long address, long offset) {
         long available = capacity - offset;
+        if (Trace.isTraceEnabled()) {
+            Trace.print(" nowrap available=" + available);
+        }
+
         if (available < Constant.INT_SIZE) {
-            return deserialize(address + Metadata.ORIGIN_OFFSET);
+            return deserialize(capacity, address + Metadata.ORIGIN_OFFSET);
         } else {
-            int length = getInt(address + offset);
+            int length = UNSAFE.getInt(address + offset);
+            if (length > capacity) {
+                throw new IndexOutOfBoundsException("payload length out of bounds: " + length);
+            }
+            if (Trace.isTraceEnabled()) {
+                Trace.print(" length=" + length);
+            }
             offset += Constant.INT_SIZE;
             available -= Constant.INT_SIZE;
 
             byte[] payload = new byte[length];
 
             if (available >= length) {
-                getBytes(address + offset, payload, length);
-                return new Block(payload);
+                UNSAFE.getBytes(address + offset, payload, length);
             } else {
                 if (available > 0) {
-                    getBytes(address + offset, payload, available);
+                    UNSAFE.getBytes(address + offset, payload, available);
                 }
-                getBytes(address + Metadata.ORIGIN_OFFSET, payload, available, length - available);
-                return new Block(payload);
+                UNSAFE.getBytes(address + Metadata.ORIGIN_OFFSET, payload, available, length - available);
             }
+            return new Block(payload);
         }
     }
 
     private void serialize(long address) {
-        withPayload(withLength(withACK(address)));
-        ack(address);
+        withPayload(withLength(address));
     }
 
-    private static Block deserialize(long address) {
-        int length = getInt(address);
+    private static Block deserialize(long capacity, long address) {
+        int length = UNSAFE.getInt(address);
         address += Constant.INT_SIZE;
 
+        if (length > capacity) {
+            throw new IndexOutOfBoundsException("payload length out of bounds: " + length);
+        }
+        if (Trace.isTraceEnabled()) {
+            Trace.print(" length=" + length);
+        }
+
         byte[] payload = new byte[length];
-        getBytes(address, payload, length);
+        UNSAFE.getBytes(address, payload, length);
 
         return new Block(payload);
     }
@@ -126,57 +129,21 @@ public class Block {
         return payload;
     }
 
-    private long withACK(long address) {
-        UNSAFE.putInt(address, ACK.SEGMENT);
-        return address + Constant.INT_SIZE;
-    }
-
     private long withLength(long address) {
-        putInt(address, this.length);
+        UNSAFE.putOrderedInt(address, this.length);
         return address + Constant.INT_SIZE;
     }
 
-    private long withPayload(long address) {
-        setBytes(this.payload, address, this.length);
-        return address + align(this.length);
+    private void withPayload(long address) {
+        UNSAFE.setBytes(this.payload, address, this.length);
     }
-
-    private long ack(long address) {
-        UNSAFE.putOrderedInt(address, ACK.DATA);
-        return address + Constant.INT_SIZE;
-    }
-
 
     private static long align(long length) {
         return Util.align(length, Constant.SIZE);
     }
 
     private static long cost(long length) {
-        return align(length) + PADDING;
-    }
-
-    private static void putInt(long address, int value) {
-        UNSAFE.putInt(address, value);
-    }
-
-    private static int getInt(long address) {
-        return UNSAFE.getInt(address);
-    }
-
-    private static void setBytes(Object src, long address, long length) {
-        UNSAFE.copyMemory(src, BYTE_ARRAY_OFFSET, null, address, length);
-    }
-
-    private static void getBytes(long address, Object dst, long length) {
-        UNSAFE.copyMemory(null, address, dst, BYTE_ARRAY_OFFSET, length);
-    }
-
-    private static void setBytes(Object src, long srcOffset, long address, long length) {
-        UNSAFE.copyMemory(src, BYTE_ARRAY_OFFSET + srcOffset, null, address, length);
-    }
-
-    private static void getBytes(long address, Object dst, long dstOffset, long length) {
-        UNSAFE.copyMemory(null, address, dst, BYTE_ARRAY_OFFSET + dstOffset, length);
+        return Constant.INT_SIZE + align(length);
     }
 
 }

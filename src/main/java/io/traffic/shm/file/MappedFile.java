@@ -16,7 +16,7 @@
 
 package io.traffic.shm.file;
 
-import io.traffic.util.UNSAFE;
+import io.traffic.util.Constant;
 import io.traffic.util.Util;
 
 import java.io.File;
@@ -42,19 +42,32 @@ public class MappedFile {
 
     private MappedFile(RandomAccessFile raf, long size) {
         this.raf = raf;
-        this.size = pageAlign(size);
+        this.size = Util.pageAlign(size);
         this.channel = raf.getChannel();
         this.address = map();
     }
 
-    public static MappedFile with(String file, long size) {
-        return with(new File(file), size);
+    public static MappedFile with(String file, boolean overwrite, long size) {
+        return with(new File(file), overwrite, size);
     }
 
-    public static MappedFile with(File file, long size) {
+    public static MappedFile with(String file, long size) {
+        return with(new File(file), false, size);
+    }
+
+    public static MappedFile with(File file, boolean overwrite, long size) {
         File parentFile = file.getParentFile();
         if (parentFile != null && !parentFile.exists()) {
             parentFile.mkdirs();
+        }
+        if (overwrite && file.exists()) {
+            if (file.delete()) {
+                try {
+                    file.createNewFile();
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
         }
 
         RandomAccessFile raf = null;
@@ -116,12 +129,12 @@ public class MappedFile {
         }
 
         Method map0 = Util.getMethod(fileChannel.getClass(), "map0", int.class, long.class, long.class);
-        return (Long) Util.invokeMethod(map0, fileChannel, modeFor(mode), mapAlign(position), pageAlign(size));
+        return (Long) Util.invokeMethod(map0, fileChannel, modeFor(mode), mapAlign(position), Util.pageAlign(size));
     }
 
     private static void unmap0(FileChannel fileChannel, long address, long size) {
-        Method ummap0 = Util.getMethod(fileChannel.getClass(), "unmap0", long.class, long.class);
-        Util.invokeMethod(ummap0, null, address, pageAlign(size));
+        Method unmap0 = Util.getMethod(fileChannel.getClass(), "unmap0", long.class, long.class);
+        Util.invokeMethod(unmap0, null, address, Util.pageAlign(size));
     }
 
     private static int modeFor(FileChannel.MapMode mapMode) {
@@ -137,16 +150,8 @@ public class MappedFile {
         return mode;
     }
 
-    private static long pageAlign(long size) {
-        return Util.align(size, pageSize());
-    }
-
-    private static int pageSize() {
-        return UNSAFE.getPageSize();
-    }
-
     private static long mapAlignment() {
-        return Util.isWindows() ? 64 << 10 : pageSize();
+        return Util.isWindows() ? 64 << 10 : Constant.PAGE_SIZE;
     }
 
     private static long mapAlign(long position) {

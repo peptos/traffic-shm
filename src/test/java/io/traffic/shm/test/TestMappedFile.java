@@ -16,10 +16,11 @@
 
 package io.traffic.shm.test;
 
-import io.traffic.shm.async.Block;
 import io.traffic.shm.async.Queue;
 import io.traffic.shm.file.MappedFile;
-import io.traffic.util.Util;
+import io.traffic.shm.sync.Transport;
+import io.traffic.util.CRC16;
+import org.junit.Assert;
 import org.junit.Test;
 
 /**
@@ -28,87 +29,55 @@ import org.junit.Test;
 public class TestMappedFile {
 
     @Test
-    public void testMap() throws Exception {
-        MappedFile mappedFile = MappedFile.with("/Users/peptos/shm", 200000L);
+    public void testMappedFile() throws Exception {
+        MappedFile mappedFile = MappedFile.with("/Users/peptos/ashm", 2000L);
         System.out.println(mappedFile.getAddress());
+
+        mappedFile.unmap();
     }
 
     @Test
     public void testQueue() throws Exception {
-        Queue queue = Queue.map("/Users/peptos/shm", 2000L, 1, 0);
+        Queue queue = Queue.map("/Users/peptos/ashm", 2000L, 1, 0);
         queue.init();
+
+        queue.close();
     }
 
     @Test
     public void testGet() throws Exception {
-        Queue queue = Queue.map("/Users/peptos/shm", 2000L, 1, 0);
+        Queue queue = Queue.map("/Users/peptos/ashm", 2000L, 1, 0);
         queue.init();
 
 
-        Block block = queue.poll();
+        io.traffic.shm.async.Block block = queue.poll();
         if (block != null) {
             System.out.println(new String(block.getPayload(), "UTF-8"));
-        }
-    }
-
-    @Test
-    public void testPoll() throws Exception {
-        Queue queue = Queue.map("/Users/peptos/shm", 2000L, 1, 0);
-        queue.init();
-
-        long millis = 10 * 1;
-        while (true) {
-            Block block = queue.poll();
-            if (block != null) {
-                System.out.println(new String(block.getPayload(), "UTF-8"));
-            } else {
-                Util.pause(millis);
-            }
-        }
-    }
-
-
-    @Test
-    public void testOffer() throws Exception {
-        Queue queue = Queue.map("/Users/peptos/shm", 2000L, 1, 0);
-
-        for (int i = 0; i <= 300000; i++) {
-            String str = "----";
-            String string = str + i + str;
-            byte[] bytes = string.getBytes("UTF-8");
-            System.out.println(i + ":" + queue.offer(new Block(bytes)));
         }
 
         queue.close();
     }
 
-
-    @Test
-    public void testThread() throws Exception {
-        final Queue queue = Queue.map("/Users/peptos/shm", 2000L, 1, 0);
-
-        for (int thread = 0; thread < 100; thread++) {
-
-            final Thread t = new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    for (int i = 0; i < 3000; i++) {
-                        String str = "----";
-                        String string = str + Thread.currentThread().getName() + "|" + i + str;
-                        byte[] bytes = string.getBytes();
-                        boolean res = queue.offer(new Block(bytes));
-                        System.out.println(Thread.currentThread().getName() + "|" + i + ":" + res);
-                    }
-                }
-            });
-            t.start();
-        }
-    }
-
-
     @Test
     public void testReset() throws Exception {
-        final Queue queue = Queue.map("/Users/peptos/shm", 2000L, 1, 0);
+        final Queue queue = Queue.map("/Users/peptos/ashm", 2000L, 1, 0);
         queue.reset();
+
+        queue.close();
+    }
+
+    @Test
+    public void testCRC16() throws Exception {
+        System.out.println(CRC16.hash("async"));
+        System.out.println(CRC16.hash("sync"));
+        Assert.assertEquals(22621, CRC16.hash("async"));
+        Assert.assertEquals(60368, CRC16.hash("sync"));
+    }
+
+    @Test
+    public void testMap() throws Exception {
+        Transport transport = Transport.map("/Users/peptos/sshm", 2, 2000);
+
+        transport.close();
     }
 }

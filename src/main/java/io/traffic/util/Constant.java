@@ -39,4 +39,10 @@ public abstract class Constant {
 
     public static final int CACHE_LINE_SIZE = Integer.getInteger("CACHE_LINE_SIZE", 64);
 
+    public static final int PAGE_SIZE = UNSAFE.getPageSize();
+
+    public static final String MAJOR_VERSION_ASYNC = "async";
+
+    public static final String MAJOR_VERSION_SYNC = "sync";
+
 }

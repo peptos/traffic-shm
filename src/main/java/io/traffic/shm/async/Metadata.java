@@ -16,8 +16,12 @@
 
 package io.traffic.shm.async;
 
+import io.traffic.util.CRC16;
 import io.traffic.util.Constant;
 import io.traffic.util.UNSAFE;
+
+import static io.traffic.util.Constant.CACHE_LINE_SIZE;
+
 
 /**
  *
@@ -27,13 +31,13 @@ import io.traffic.util.UNSAFE;
  *  +-------------+---------------+---------------+---------------+---------------------+-------------------------------+---------------------+-------------------------------+
  *  |-magic number|-minor-|-major-| ----- id ---- | --- index --- |                     |-------- read  cursor -------- |                     | -------- write cursor-------- |
  *  |             | -- version -- |               |
- *  0             4               8               12
+ *  0             4               8               12              16
  *
  * @author cuiyi
  */
 public class Metadata {
 
-    public static final int ORIGIN_OFFSET = Constant.CACHE_LINE_SIZE * 4;
+    public static final int ORIGIN_OFFSET = CACHE_LINE_SIZE * 4;
 
     private static final int MAGIC_NUMBER = 0x414E4E41;
     private static final int MAGIC_NUMBER_OFFSET = 0;
@@ -41,8 +45,8 @@ public class Metadata {
     private static final int MAJOR_VERSION_OFFSET = 6;
     private static final int ID_OFFSET = 8;
     private static final int INDEX_OFFSET = 12;
-    private static final int READ_OFFSET = Constant.CACHE_LINE_SIZE;
-    private static final int WRITE_OFFSET = Constant.CACHE_LINE_SIZE * 3;
+    private static final int READ_OFFSET = CACHE_LINE_SIZE;
+    private static final int WRITE_OFFSET = CACHE_LINE_SIZE * 3;
 
     private static final int READ_INITIAL_VALUE = ORIGIN_OFFSET;
     private static final int WRITE_INITIAL_VALUE = ORIGIN_OFFSET;
@@ -61,6 +65,7 @@ public class Metadata {
 
     public void initialize(int id, int index) {
         UNSAFE.putInt(address + MAGIC_NUMBER_OFFSET, MAGIC_NUMBER);
+        UNSAFE.putUnsignedShort(address + MAJOR_VERSION_OFFSET, CRC16.hash(Constant.MAJOR_VERSION_ASYNC));
 
         if (setId(id) && setIndex(index)
                 && read.update(0, Metadata.READ_INITIAL_VALUE)
