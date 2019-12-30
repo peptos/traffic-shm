@@ -20,6 +20,7 @@ import io.traffic.shm.file.MappedFile;
 import io.traffic.util.Assert;
 import io.traffic.util.Constant;
 import io.traffic.util.Trace;
+import io.traffic.util.UNSAFE;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -33,6 +34,7 @@ public class Queue implements Closeable {
     private final int id;
     private final int index;
     private final long capacity;
+    private final long mask;
     private final long address;
     private final Metadata metadata;
     private final Cursor readCursor;
@@ -45,6 +47,7 @@ public class Queue implements Closeable {
         this.id = id;
         this.index = index;
         this.capacity = mappedFile.getSize();
+        this.mask = this.capacity - 1;
         this.address = mappedFile.getAddress();
         this.metadata = new Metadata(this.address);
         this.readCursor = this.metadata.readCursor();
@@ -58,7 +61,7 @@ public class Queue implements Closeable {
     }
 
     public void init() {
-        metadata.initialize(id, index);
+        metadata.initialize(this.id, this.index);
     }
 
     @Override
@@ -92,28 +95,35 @@ public class Queue implements Closeable {
         if (read == write) {
             return null;
         }
+
         if (Trace.isTraceEnabled()) {
             Trace.print("read=" + read + " write=" + write);
         }
+
         long read_abs = Math.abs(read);
-        Block block = Block.deserialize(capacity, address, read_abs);
+        Block block = Block.deserialize(this.capacity, this.address, read_abs);
+        if (block != null) {
+            long shift = read_abs + block.sizeof();
+            long mode = read;
 
-        long shift = read_abs + block.sizeof();
-        long mode = read;
-
-        if (shift >= capacity) {
-            shift = Metadata.ORIGIN_OFFSET + shift % capacity;
-            mode = -mode;
-        }
-        long next = (mode < 0) ? -shift : shift;
-        if (readCursor.update(read, next)) {
-            if (Trace.isTraceEnabled()) {
-                Trace.println(" read shift=" + next + " FIN");
+            if (shift > this.capacity) {
+                shift = Metadata.ORIGIN_OFFSET + (shift & this.mask);
+                mode = -mode;
             }
-            return block;
-        }
-        if (Trace.isTraceEnabled()) {
-            Trace.println(" read shift=" + next);
+            long next = (mode < 0) ? -shift : shift;
+
+            if (readCursor.update(read, next)) {
+//                UNSAFE.storeFence();
+                long prev = (capacity - read_abs) < Constant.INT_SIZE ? Metadata.ORIGIN_OFFSET : read_abs;
+                UNSAFE.putIntVolatile(this.address + prev, 0);
+                if (Trace.isTraceEnabled()) {
+                    Trace.println(" read_shift=" + next + " FIN");
+                }
+                return block;
+            }
+            if (Trace.isTraceEnabled()) {
+                Trace.println(" read_shift=" + next);
+            }
         }
         return null;
     }
@@ -123,35 +133,35 @@ public class Queue implements Closeable {
         long write_abs = Math.abs(write);
         long read_abs = Math.abs(read);
 
-        long available = capacity - Metadata.ORIGIN_OFFSET - Math.abs(write_abs - read_abs);
-        if (write * read < 0) {
-            available = Math.abs(write_abs - read_abs);
-        }
-
-        if ((available - Constant.INT_SIZE) < block.sizeof()) {
-            return -1;
-        }
-
-        if (Trace.isTraceEnabled()) {
-            Trace.print("read=" + read + " write=" + write + " available=" + (available - Constant.INT_SIZE) + " length=" + block.sizeof());
-        }
-
         long shift = write_abs + block.sizeof();
-        if (shift >= capacity) {
+        if (shift > this.capacity) {
             mode = -mode;
-            shift = Metadata.ORIGIN_OFFSET + shift % capacity;
+            shift = Metadata.ORIGIN_OFFSET + (shift & this.mask);;
         }
 
         long next = (mode < 0) ? -shift : shift;
+
+        if (Trace.isTraceEnabled()) {
+            Trace.print("read=" + read + " write=" + write + " length=" + block.sizeof() + " write_shift=" + next);
+        }
+
+        if (next * read < 0) {
+            if (shift >= (read_abs - Constant.INT_SIZE)) {
+                Trace.println(" OOB");
+                return -1;
+            }
+        }
+
         if (writeCursor.update(write, next)) {
+//            UNSAFE.storeFence();
             block.serialize(capacity, address, write_abs);
             if (Trace.isTraceEnabled()) {
-                Trace.println(" write shift=" + next + " FIN");
+                Trace.println(" FIN");
             }
             return 1;
         }
         if (Trace.isTraceEnabled()) {
-            Trace.println(" write shift=" + next);
+            Trace.println("");
         }
         return 0;
     }

@@ -21,7 +21,10 @@ import io.traffic.util.Trace;
 import io.traffic.util.Util;
 import org.junit.*;
 
-public class TestReader {
+import java.io.FileOutputStream;
+import java.io.PrintStream;
+
+public class TestReaderA {
 
     private static Queue queue = null;
     private static volatile boolean running = false;
@@ -45,7 +48,10 @@ public class TestReader {
         queue = Queue.map("/Users/peptos/ashm", 2000L, 1, 0);
         queue.init();
         running = true;
-        Trace.enable();
+        Trace.disable();
+
+        PrintStream ps = new PrintStream(new FileOutputStream("r.txt"));
+        System.setOut(ps);
     }
 
     @Test

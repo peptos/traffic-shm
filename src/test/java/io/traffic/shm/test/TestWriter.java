@@ -20,21 +20,27 @@ import io.traffic.shm.async.Queue;
 import io.traffic.util.Trace;
 import org.junit.Test;
 
+import java.io.FileOutputStream;
+import java.io.PrintStream;
+
 public class TestWriter {
 
     @Test
     public void testOfferA() throws Exception {
-        Trace.enable();
+        Trace.disable();
+        PrintStream ps = new PrintStream(new FileOutputStream("w.txt"));
+        System.setOut(ps);
         Queue queue = Queue.map("/Users/peptos/ashm", 2000L, 1, 0);
 
-        for (int i = 0; i <= 90000000; i++) {
-            String str = "----";
+        for (int i = 0; i <= 900000000; i++) {
+            String str = "";
             String string = str + i + str;
             byte[] bytes = string.getBytes("UTF-8");
             boolean isOk = queue.offer(new io.traffic.shm.async.Block(bytes));
-//            if (isOk) {
-//                System.out.println(i);
-//            }
+            if (isOk) {
+                System.out.println(i);
+
+            }
         }
 
         queue.close();

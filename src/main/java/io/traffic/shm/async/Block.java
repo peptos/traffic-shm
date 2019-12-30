@@ -43,99 +43,90 @@ public class Block {
     }
 
     public void serialize(long capacity, long address, long offset) {
-        if (offset + sizeof() <= capacity) {
+        long available = capacity - offset;
+
+        if (available >= sizeof()) {
             // no overflow
-            serialize(address + offset);
+            serialize(address, offset, available, capacity);
         } else {
-            long available = capacity - offset;
             if (available < Constant.INT_SIZE) {
                 // whole block overflow
-                serialize(address + Metadata.ORIGIN_OFFSET);
+                serialize(address, Metadata.ORIGIN_OFFSET, available, capacity);
             } else if (available == Constant.INT_SIZE) {
                 // put length in, but payload overflow
-                withLength(address + offset);
-                withPayload(address + Metadata.ORIGIN_OFFSET);
+                serialize(address, offset, available, capacity);
             } else {
                 // payload overflow
-                withLength((address + offset));
-                available -= Constant.INT_SIZE;;
+                withLength(address, offset);
+                offset += Constant.INT_SIZE;
+                available -= Constant.INT_SIZE;
+
                 if (available > 0) {
-                    UNSAFE.setBytes(payload, address + offset + Constant.INT_SIZE, available);
+                    UNSAFE.setBytes(payload, address + offset, available);
                 }
                 UNSAFE.setBytes(payload, available, address + Metadata.ORIGIN_OFFSET, length - available);
             }
         }
     }
 
+    public void serialize(long address, long offset, long available, long capacity) {
+        withLength(address, offset);
+        offset += Constant.INT_SIZE;
+        if (available == Constant.INT_SIZE) {
+            withPayload(address, Metadata.ORIGIN_OFFSET);
+        } else {
+            withPayload(address, offset);
+        }
+
+    }
+
     public static Block deserialize(long capacity, long address, long offset) {
         long available = capacity - offset;
         if (Trace.isTraceEnabled()) {
-            Trace.print(" nowrap available=" + available);
+            Trace.print(" nowrap=" + available);
         }
-
         if (available < Constant.INT_SIZE) {
-            return deserialize(capacity, address + Metadata.ORIGIN_OFFSET);
+            return deserialize(address, Metadata.ORIGIN_OFFSET, capacity - Metadata.ORIGIN_OFFSET, capacity);
         } else {
-            int length = UNSAFE.getInt(address + offset);
-            if (length > capacity) {
-                throw new IndexOutOfBoundsException("payload length out of bounds: " + length);
-            }
-            if (Trace.isTraceEnabled()) {
-                Trace.print(" length=" + length);
-            }
-            offset += Constant.INT_SIZE;
-            available -= Constant.INT_SIZE;
-
-            byte[] payload = new byte[length];
-
-            if (available >= length) {
-                UNSAFE.getBytes(address + offset, payload, length);
-            } else {
-                if (available > 0) {
-                    UNSAFE.getBytes(address + offset, payload, available);
-                }
-                UNSAFE.getBytes(address + Metadata.ORIGIN_OFFSET, payload, available, length - available);
-            }
-            return new Block(payload);
+            return deserialize(address, offset, available, capacity);
         }
     }
 
-    private void serialize(long address) {
-        withPayload(withLength(address));
-    }
-
-    private static Block deserialize(long capacity, long address) {
-        int length = UNSAFE.getInt(address);
-        address += Constant.INT_SIZE;
-
-        if (length > capacity) {
-            throw new IndexOutOfBoundsException("payload length out of bounds: " + length);
-        }
+    private static Block deserialize(long address, long offset, long available, long capacity) {
+        int length = UNSAFE.getIntVolatile(address + offset);
         if (Trace.isTraceEnabled()) {
             Trace.print(" length=" + length);
         }
+        if (length <= 0 || length > capacity) {
+            Trace.println(" OOB");
+            return null;
+        }
+        offset += Constant.INT_SIZE;
+        available -= Constant.INT_SIZE;
 
         byte[] payload = new byte[length];
-        UNSAFE.getBytes(address, payload, length);
 
+        if (available >= length) {
+            UNSAFE.getBytes(address + offset, payload, length);
+        } else {
+            if (available > 0) {
+                UNSAFE.getBytes(address + offset, payload, available);
+            }
+            UNSAFE.getBytes(address + Metadata.ORIGIN_OFFSET, payload, available, length - available);
+        }
         return new Block(payload);
+    }
+
+    private void withLength(long address, long offset) {
+        UNSAFE.putIntVolatile(address + offset, this.length);
+    }
+
+    private void withPayload(long address, long offset) {
+        UNSAFE.setBytes(this.payload, address + offset, this.length);
     }
 
     public long sizeof() {
         return cost(length);
-    }
-
-    public byte[] getPayload() {
-        return payload;
-    }
-
-    private long withLength(long address) {
-        UNSAFE.putOrderedInt(address, this.length);
-        return address + Constant.INT_SIZE;
-    }
-
-    private void withPayload(long address) {
-        UNSAFE.setBytes(this.payload, address, this.length);
     }
 
     private static long align(long length) {
@@ -146,4 +137,7 @@ public class Block {
         return Constant.INT_SIZE + align(length);
     }
 
+    public byte[] getPayload() {
+        return payload;
+    }
 }
