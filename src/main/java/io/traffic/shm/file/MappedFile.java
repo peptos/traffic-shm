@@ -47,12 +47,27 @@ public class MappedFile {
         this.address = map();
     }
 
-    public static MappedFile with(String file, boolean overwrite, long size) {
-        return with(new File(file), overwrite, size);
+    public static MappedFile with(String file, long size) {
+        return with(new File(file), size);
     }
 
-    public static MappedFile with(String file, long size) {
-        return with(new File(file), false, size);
+    public static MappedFile with(File file, long size) {
+        return with(file, false, size);
+    }
+
+    /**
+     * this method just for writer
+     */
+    public static MappedFile as(String file) {
+        File f = new File(file);
+        if (!f.exists() || !f.isFile()) {
+            throw new IllegalArgumentException(new FileNotFoundException());
+        }
+        return with(f, f.length());
+    }
+
+    public static MappedFile with(String file, boolean overwrite, long size) {
+        return with(new File(file), overwrite, size);
     }
 
     public static MappedFile with(File file, boolean overwrite, long size) {
@@ -70,11 +85,15 @@ public class MappedFile {
             }
         }
 
+        if (size <= 0) {
+            throw new IllegalArgumentException("The specified file size must greater than 0");
+        }
+
         RandomAccessFile raf = null;
         try {
             raf = new RandomAccessFile(file, "rw");
         } catch (FileNotFoundException ex) {
-            throw new IllegalArgumentException("mapped file not found", ex);
+            throw new IllegalArgumentException("The specified file not found", ex);
         }
 
         return new MappedFile(raf, size);

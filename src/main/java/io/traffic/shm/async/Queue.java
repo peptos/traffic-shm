@@ -19,8 +19,7 @@ package io.traffic.shm.async;
 import io.traffic.shm.file.MappedFile;
 import io.traffic.util.Assert;
 import io.traffic.util.Constant;
-import io.traffic.util.Trace;
-import io.traffic.util.UNSAFE;
+import io.traffic.util.Tracer;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -34,7 +33,6 @@ public class Queue implements Closeable {
     private final int id;
     private final int index;
     private final long capacity;
-    private final long mask;
     private final long address;
     private final Metadata metadata;
     private final Cursor readCursor;
@@ -47,21 +45,33 @@ public class Queue implements Closeable {
         this.id = id;
         this.index = index;
         this.capacity = mappedFile.getSize();
-        this.mask = this.capacity - 1;
         this.address = mappedFile.getAddress();
-        this.metadata = new Metadata(this.address);
+        this.metadata = new Metadata(this.capacity, this.address);
         this.readCursor = this.metadata.readCursor();
         this.writeCursor = this.metadata.writeCursor();
     }
 
-
-    public static Queue map(String file, long size, int id, int index) {
-        MappedFile mappedFile = MappedFile.with(file, size);
-        return new Queue(mappedFile, id, index);
+    public static Queue map(String file, long size) {
+        return map(file, size, 0, 0);
     }
 
-    public void init() {
+    public static Queue map(String file, long size, int id, int index) {
+        Queue queue = new Queue(MappedFile.with(file, size), id, index);
+        queue.init();
+        return queue;
+    }
+
+    private void init() {
         metadata.initialize(this.id, this.index);
+    }
+
+    public static Queue attach(String file) {
+        return attach(file, 0, 0);
+    }
+
+    public static Queue attach(String file, int id, int index) {
+        Queue queue = new Queue(MappedFile.as(file), id, index);
+        return queue;
     }
 
     @Override
@@ -70,7 +80,6 @@ public class Queue implements Closeable {
             this.mappedFile.unmap();
         }
     }
-
 
     public Block poll() {
         return read(readCursor.offset(), writeCursor.offset());
@@ -96,77 +105,51 @@ public class Queue implements Closeable {
             return null;
         }
 
-        if (Trace.isTraceEnabled()) {
-            Trace.print("read=" + read + " write=" + write);
+        long offset = rescale(read);
+        Block block = Block.deserialize(this.capacity, this.address, offset);
+        if (block == null) {
+            return null;
         }
 
-        long read_abs = Math.abs(read);
-        Block block = Block.deserialize(this.capacity, this.address, read_abs);
-        if (block != null) {
-            long shift = read_abs + block.sizeof();
-            long mode = read;
-
-            if (shift > this.capacity) {
-                shift = Metadata.ORIGIN_OFFSET + (shift & this.mask);
-                mode = -mode;
+        long shift = read + block.sizeof();
+        if (readCursor.update(read, shift)) {
+//            UNSAFE.putIntVolatile(this.address + read, 0);
+            if (Tracer.isTraceEnabled()) {
+                Tracer.println("R=" + read + " W=" + write + " r=" + rescale(read) + " w=" + rescale(write)
+                        + " l=" + block.getPayload().length + " RS=" + shift + " rs=" + rescale(shift) + " FIN");
             }
-            long next = (mode < 0) ? -shift : shift;
-
-            if (readCursor.update(read, next)) {
-//                UNSAFE.storeFence();
-                long prev = (capacity - read_abs) < Constant.INT_SIZE ? Metadata.ORIGIN_OFFSET : read_abs;
-                UNSAFE.putIntVolatile(this.address + prev, 0);
-                if (Trace.isTraceEnabled()) {
-                    Trace.println(" read_shift=" + next + " FIN");
-                }
-                return block;
-            }
-            if (Trace.isTraceEnabled()) {
-                Trace.println(" read_shift=" + next);
-            }
+            return block;
         }
         return null;
     }
 
     private int write(long write, long read, Block block) {
-        long mode = write;
-        long write_abs = Math.abs(write);
-        long read_abs = Math.abs(read);
+        long available = this.capacity - Metadata.ORIGIN_OFFSET - write + read;
 
-        long shift = write_abs + block.sizeof();
-        if (shift > this.capacity) {
-            mode = -mode;
-            shift = Metadata.ORIGIN_OFFSET + (shift & this.mask);;
+        if (block.sizeof() > available - Constant.INT_SIZE) {
+            return -1;
         }
 
-        long next = (mode < 0) ? -shift : shift;
-
-        if (Trace.isTraceEnabled()) {
-            Trace.print("read=" + read + " write=" + write + " length=" + block.sizeof() + " write_shift=" + next);
-        }
-
-        if (next * read < 0) {
-            if (shift >= (read_abs - Constant.INT_SIZE)) {
-                Trace.println(" OOB");
-                return -1;
+        long shift = write + block.sizeof();
+        if (writeCursor.update(write, shift)) {
+            long offset = rescale(write);
+            block.serialize(capacity, address, offset);
+            if (Tracer.isTraceEnabled()) {
+                Tracer.println("W=" + write + " R=" + read + " w=" + rescale(write) + " r=" + rescale(read)
+                        + " l=" + block.sizeof() + " WS=" + shift + " ws=" + rescale(shift) + " FIN");
             }
-        }
-
-        if (writeCursor.update(write, next)) {
-//            UNSAFE.storeFence();
-            block.serialize(capacity, address, write_abs);
-            if (Trace.isTraceEnabled()) {
-                Trace.println(" FIN");
-            }
+            // UNSAFE.fullFence();
             return 1;
-        }
-        if (Trace.isTraceEnabled()) {
-            Trace.println("");
         }
         return 0;
     }
 
     public boolean reset() {
        return writeCursor.update(writeCursor.offset(), readCursor.offset());
+    }
+
+
+    private long rescale(long value) {
+        return Cursor.rescale(value, Metadata.ORIGIN_OFFSET, this.capacity);
     }
 }

@@ -17,12 +17,9 @@
 package io.traffic.shm.test;
 
 import io.traffic.shm.async.Queue;
-import io.traffic.util.Trace;
+import io.traffic.util.Tracer;
 import io.traffic.util.Util;
 import org.junit.*;
-
-import java.io.FileOutputStream;
-import java.io.PrintStream;
 
 public class TestReaderA {
 
@@ -45,13 +42,13 @@ public class TestReaderA {
 
     @Before
     public void setUp() throws Exception {
-        queue = Queue.map("/Users/peptos/ashm", 2000L, 1, 0);
-        queue.init();
+        queue = Queue.map("/Users/peptos/ashm", 2000L);
         running = true;
-        Trace.disable();
 
-        PrintStream ps = new PrintStream(new FileOutputStream("r.txt"));
-        System.setOut(ps);
+        Tracer.enable();
+
+//        PrintStream ps = new PrintStream(new FileOutputStream("r.txt"));
+//        System.setOut(ps);
     }
 
     @Test

@@ -32,11 +32,11 @@ import java.util.concurrent.TimeUnit;
 @Fork(5)
 public class TestBenchmark {
 
-    Queue queue = Queue.map("/Users/peptos/shm", 2000000000L, 1, 0);
+    Queue queue = Queue.map("/Users/peptos/ashm", 2000L);
 
     @Setup(Level.Iteration)
     public void setup(){
-        queue.init();
+
     }
 
 

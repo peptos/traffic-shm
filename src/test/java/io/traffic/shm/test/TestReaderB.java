@@ -17,7 +17,7 @@
 package io.traffic.shm.test;
 
 import io.traffic.shm.async.Queue;
-import io.traffic.util.Trace;
+import io.traffic.util.Tracer;
 import io.traffic.util.Util;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -45,10 +45,10 @@ public class TestReaderB {
 
     @Before
     public void setUp() throws Exception {
-        queue = Queue.map("/Users/peptos/ashm", 2000L, 1, 0);
-        queue.init();
+        queue = Queue.map("/Users/peptos/ashm", 2000L);
         running = true;
-        Trace.enable();
+
+        Tracer.enable();
     }
 
     @Test

@@ -38,17 +38,14 @@ public class TestMappedFile {
 
     @Test
     public void testQueue() throws Exception {
-        Queue queue = Queue.map("/Users/peptos/ashm", 2000L, 1, 0);
-        queue.init();
+        Queue queue = Queue.map("/Users/peptos/ashm", 2000L);
 
         queue.close();
     }
 
     @Test
     public void testGet() throws Exception {
-        Queue queue = Queue.map("/Users/peptos/ashm", 2000L, 1, 0);
-        queue.init();
-
+        Queue queue = Queue.map("/Users/peptos/ashm", 2000L);
 
         io.traffic.shm.async.Block block = queue.poll();
         if (block != null) {
@@ -60,7 +57,7 @@ public class TestMappedFile {
 
     @Test
     public void testReset() throws Exception {
-        final Queue queue = Queue.map("/Users/peptos/ashm", 2000L, 1, 0);
+        final Queue queue = Queue.map("/Users/peptos/ashm", 2000L);
         queue.reset();
 
         queue.close();

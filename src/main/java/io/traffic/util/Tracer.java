@@ -16,7 +16,7 @@
 
 package io.traffic.util;
 
-public class Trace {
+public class Tracer {
 
     private volatile static boolean enable = false;
 

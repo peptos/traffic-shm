@@ -31,6 +31,15 @@ public class Cursor {
         this.offset = offset;
     }
 
+    public static long rescale(long value, long min, long max) {
+        // return min + ((value & Long.MAX_VALUE) - min) % (max - min);
+
+        // The reason why the above code can not be used
+        // is to reserve data in the range 0-256
+        // after the cursor of Long type overflows
+        return min + (value & Long.MAX_VALUE) % (max - min);
+    }
+
     public boolean update(long expected, long value) {
         return UNSAFE.compareAndSwapLong(address + offset, expected, value);
     }

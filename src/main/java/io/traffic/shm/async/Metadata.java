@@ -51,12 +51,14 @@ public class Metadata {
     private static final int READ_INITIAL_VALUE = ORIGIN_OFFSET;
     private static final int WRITE_INITIAL_VALUE = ORIGIN_OFFSET;
 
+    private final long capacity;
     private final long address;
     private final Cursor read;
     private final Cursor write;
 
 
-    public Metadata(long address) {
+    public Metadata(long capacity, long address) {
+        this.capacity = capacity;
         this.address = address;
         this.read = new Cursor(this.address, READ_OFFSET);
         this.write = new Cursor(this.address, WRITE_OFFSET);

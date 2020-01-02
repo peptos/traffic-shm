@@ -17,23 +17,22 @@
 package io.traffic.shm.test;
 
 import io.traffic.shm.async.Queue;
-import io.traffic.util.Trace;
+import io.traffic.util.Tracer;
 import org.junit.Test;
-
-import java.io.FileOutputStream;
-import java.io.PrintStream;
 
 public class TestWriter {
 
     @Test
     public void testOfferA() throws Exception {
-        Trace.disable();
-        PrintStream ps = new PrintStream(new FileOutputStream("w.txt"));
-        System.setOut(ps);
-        Queue queue = Queue.map("/Users/peptos/ashm", 2000L, 1, 0);
+        Tracer.enable();
+
+//        PrintStream ps = new PrintStream(new FileOutputStream("w.txt"));
+//        System.setOut(ps);
+
+        Queue queue = Queue.attach("/Users/peptos/ashm");
 
         for (int i = 0; i <= 900000000; i++) {
-            String str = "";
+            String str = "----";
             String string = str + i + str;
             byte[] bytes = string.getBytes("UTF-8");
             boolean isOk = queue.offer(new io.traffic.shm.async.Block(bytes));
@@ -48,8 +47,8 @@ public class TestWriter {
 
     @Test
     public void testOfferB() throws Exception {
-        Trace.enable();
-        Queue queue = Queue.map("/Users/peptos/ashm", 2000L, 1, 0);
+        Tracer.enable();
+        Queue queue = Queue.attach("/Users/peptos/ashm");
 
         for (int i = 0; i <= 30000; i++) {
             String str = "****";
@@ -64,9 +63,10 @@ public class TestWriter {
 
     @Test
     public void testThread() throws Exception {
-        final Queue queue = Queue.map("/Users/peptos/ashm", 2000L, 1, 0);
+        //Tracer.enable();
+        final Queue queue = Queue.attach("/Users/peptos/ashm");
 
-        for (int thread = 0; thread < 1000; thread++) {
+        for (int thread = 0; thread < 10; thread++) {
 
             final Thread t = new Thread(new Runnable() {
                 @Override
@@ -76,7 +76,7 @@ public class TestWriter {
                         String string = str + Thread.currentThread().getName() + "|" + i + str;
                         byte[] bytes = string.getBytes();
                         boolean res = queue.offer(new io.traffic.shm.async.Block(bytes));
-                        //System.out.println(Thread.currentThread().getName() + "|" + i + ":" + res);
+                        System.out.println(Thread.currentThread().getName() + "|" + i + ":" + res);
                     }
                 }
             });

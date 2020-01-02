@@ -31,7 +31,7 @@ import io.traffic.util.*;
  *
  * @author cuiyi
  */
-public class Block {
+public final class Block {
 
     private final int length;
     private final byte[] payload;
@@ -77,14 +77,18 @@ public class Block {
         } else {
             withPayload(address, offset);
         }
+    }
 
+    private void withLength(long address, long offset) {
+        UNSAFE.putIntVolatile(address + offset, this.length);
+    }
+
+    private void withPayload(long address, long offset) {
+        UNSAFE.setBytes(this.payload, address + offset, this.length);
     }
 
     public static Block deserialize(long capacity, long address, long offset) {
         long available = capacity - offset;
-        if (Trace.isTraceEnabled()) {
-            Trace.print(" nowrap=" + available);
-        }
         if (available < Constant.INT_SIZE) {
             return deserialize(address, Metadata.ORIGIN_OFFSET, capacity - Metadata.ORIGIN_OFFSET, capacity);
         } else {
@@ -94,11 +98,8 @@ public class Block {
 
     private static Block deserialize(long address, long offset, long available, long capacity) {
         int length = UNSAFE.getIntVolatile(address + offset);
-        if (Trace.isTraceEnabled()) {
-            Trace.print(" length=" + length);
-        }
+
         if (length <= 0 || length > capacity) {
-            Trace.println(" OOB");
             return null;
         }
         offset += Constant.INT_SIZE;
@@ -115,14 +116,6 @@ public class Block {
             UNSAFE.getBytes(address + Metadata.ORIGIN_OFFSET, payload, available, length - available);
         }
         return new Block(payload);
-    }
-
-    private void withLength(long address, long offset) {
-        UNSAFE.putIntVolatile(address + offset, this.length);
-    }
-
-    private void withPayload(long address, long offset) {
-        UNSAFE.setBytes(this.payload, address + offset, this.length);
     }
 
     public long sizeof() {
