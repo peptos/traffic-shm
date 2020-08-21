@@ -18,7 +18,6 @@ package io.traffic.shm.test;
 
 import io.traffic.shm.async.Queue;
 import io.traffic.shm.file.MappedFile;
-import io.traffic.shm.sync.Transport;
 import io.traffic.util.CRC16;
 import org.junit.Assert;
 import org.junit.Test;
@@ -71,10 +70,4 @@ public class TestMappedFile {
         Assert.assertEquals(60368, CRC16.hash("sync"));
     }
 
-    @Test
-    public void testMap() throws Exception {
-        Transport transport = Transport.map("/Users/peptos/sshm", 2, 2000);
-
-        transport.close();
-    }
 }

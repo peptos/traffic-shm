@@ -25,7 +25,7 @@ Note:
 
 ### 3. Async Mode:
 #### 3.1 Lock-Free
-With non-blocking algorithm, implementation of a multi-producer/single-consumer concurrent queue, **traffic-shm** could be use to build a real-time system with high throughput and low latency.
+With non-blocking algorithm, implementation of multi-producer/single-consumer and multi-producer/multi-consumer concurrent queue, **traffic-shm** could be use to build a real-time system with high throughput and low latency.
 
 #### 3.2 Message Ordering
 
@@ -40,20 +40,15 @@ offer a multi-producer/single-consumer concurrent data structure
 **Async Mode:**
 ![Async](https://github.com/peptos/traffic-shm/raw/master/async.png)
 
-**Sync Mode:**
-![Sync](https://github.com/peptos/traffic-shm/raw/master/async.png)
-
-
 ## Getting Started
 
 ***Async:***
 
 *Reader:*
 
-	Queue queue = Queue.map("/Users/peptos/ashm", 2000L, 1, 0);
-	queue.init();
+	Queue queue = Queue.map("/Users/peptos/ashm", 2000L);;
 
-	while (true) {
+	while (running) {
 		Block block = queue.poll();
 		if (block != null) {
 			System.out.println(new String(block.getPayload(), "UTF-8"));
@@ -61,53 +56,16 @@ offer a multi-producer/single-consumer concurrent data structure
 			Util.pause(10);
 		}
 	}
+	
+	queue.close();
+	
 
 *Writer:*
 
-	Queue queue = Queue.map("/Users/peptos/ashm", 2000L, 1, 0);
+	Queue queue = Queue.attach("/Users/peptos/ashm");
 
 	String string = "hello, world";
 	byte[] bytes = string.getBytes("UTF-8");
 	System.out.println(queue.offer(new Block(bytes)));
 
 	queue.close();
-
-***Sync:***
-
-*Reactor:*
-
-    Reactor reactor = Reactor.bind("/Users/peptos/sshm", 5, 2000);
-    while (true) {
-        byte[] bitmap = reactor.select();
-        for (int i = 0; i < bitmap.length; i++) {
-            if (ACK.ESTABLISHED == bitmap[i]) {
-                Block block = reactor.get(i);
-
-                try {
-                    Thread.sleep(2000); // MOCK do the business
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-
-                Block response = new Block(String.valueOf(Math.random()).getBytes());
-                response.setIndex(block.getIndex());
-                reactor.feedback(response);
-            }
-        }
-    }
-	
-
-*Transport:*
-
-	Transport transport = Transport.map("/Users/peptos/sshm", 5, 2000);
-	try {
-      Block para = new Block(String.valueOf(Math.random()).getBytes());
-      Block block = transport.submit(para, 10, TimeUnit.SECONDS);
-      System.out.println(new String(block.getPayload()));
-	} catch (InterruptedException e) {
-      e.printStackTrace();
-	} catch (TimeoutException e) {
-      e.printStackTrace();
-	}
-	
-	transport.close();

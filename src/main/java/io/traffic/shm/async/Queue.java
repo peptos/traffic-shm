@@ -113,7 +113,6 @@ public class Queue implements Closeable {
 
         long shift = read + block.sizeof();
         if (readCursor.update(read, shift)) {
-//            UNSAFE.putIntVolatile(this.address + read, 0);
             if (Tracer.isTraceEnabled()) {
                 Tracer.println("R=" + read + " W=" + write + " r=" + rescale(read) + " w=" + rescale(write)
                         + " l=" + block.getPayload().length + " RS=" + shift + " rs=" + rescale(shift) + " FIN");
@@ -138,7 +137,6 @@ public class Queue implements Closeable {
                 Tracer.println("W=" + write + " R=" + read + " w=" + rescale(write) + " r=" + rescale(read)
                         + " l=" + block.sizeof() + " WS=" + shift + " ws=" + rescale(shift) + " FIN");
             }
-            // UNSAFE.fullFence();
             return 1;
         }
         return 0;
